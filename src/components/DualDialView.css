@@ -1,0 +1,89 @@
+.dial-view {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.dial-view__header h2 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.dial-view__header p {
+  margin: 0 0 24px 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.dial-view__stage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 16px 0 24px 0;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+.dial-view__controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.dial-view__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.15s ease;
+}
+
+.dial-view__btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.dial-view__btn:active {
+  transform: scale(0.97);
+}
+
+.dial-view__info-card {
+  width: 100%;
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.dial-view__info-card h3 {
+  margin: 0 0 10px 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.dial-view__info-card ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #4b5563;
+}

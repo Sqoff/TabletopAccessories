@@ -1,0 +1,239 @@
+.touch-picker {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  height: calc(100vh - 90px);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 20px 16px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.touch-picker__header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 700;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.status-badge--counting {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+  animation: pulse 1s infinite;
+}
+
+.status-badge--winner {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+  font-size: 15px;
+}
+
+.touch-picker__canvas {
+  flex: 1;
+  position: relative;
+  background: #18181b;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.4);
+  touch-action: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.touch-picker__placeholder {
+  text-align: center;
+  color: #a1a1aa;
+  pointer-events: none;
+  padding: 20px;
+}
+
+.placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.touch-picker__placeholder h3 {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  color: #f4f4f5;
+  font-weight: 700;
+}
+
+.touch-picker__placeholder p {
+  margin: 0;
+  font-size: 14px;
+  color: #a1a1aa;
+}
+
+.desktop-hint {
+  margin-top: 12px !important;
+  font-size: 12px !important;
+  color: #71717a !important;
+}
+
+/* Touch Points */
+.touch-point {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 10;
+  transition: opacity 0.3s ease;
+}
+
+.touch-point__core {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background: var(--touch-color, #3b82f6);
+  opacity: 0.85;
+  box-shadow: 0 0 25px var(--touch-color, #3b82f6);
+  animation: corePulse 1.2s infinite ease-in-out;
+}
+
+.touch-point__ripple {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px solid var(--touch-color, #3b82f6);
+  opacity: 0.6;
+  animation: ripple 1.5s infinite linear;
+}
+
+.touch-point.winner .touch-point__core {
+  width: 100px;
+  height: 100px;
+  background: #fbbf24;
+  box-shadow: 0 0 50px #f59e0b, 0 0 100px #f59e0b;
+  animation: winnerBurst 0.5s ease-out forwards;
+}
+
+.touch-point.winner .touch-point__crown {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #f59e0b;
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.touch-point.loser {
+  opacity: 0.2;
+}
+
+/* Countdown indicator */
+.countdown-indicator {
+  position: absolute;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90px;
+  height: 90px;
+}
+
+.countdown-text {
+  font-size: 40px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+/* Footer controls */
+.touch-picker__footer {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.touch-picker__reset-btn,
+.touch-picker__action-btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+  transition: all 0.15s ease;
+}
+
+.touch-picker__action-btn {
+  background: #10b981;
+  color: #ffffff;
+  border-color: #059669;
+}
+
+.touch-picker__reset-btn:hover {
+  background: #f3f4f6;
+}
+
+.touch-picker__action-btn:hover {
+  background: #059669;
+}
+
+@keyframes ripple {
+  0% {
+    width: 60px;
+    height: 60px;
+    opacity: 0.8;
+  }
+  100% {
+    width: 140px;
+    height: 140px;
+    opacity: 0;
+  }
+}
+
+@keyframes corePulse {
+  0%, 100% {
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes winnerBurst {
+  0% {
+    transform: scale(0.8);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
