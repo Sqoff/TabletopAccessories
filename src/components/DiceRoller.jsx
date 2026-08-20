@@ -202,7 +202,7 @@ export default function DiceRoller() {
           onThrow={() => rollDice(sides)}
         />
         <div className="dice-stage-hint">
-          <span>📦 상자 안에서 튕기며 굴러갑니다 (터치/드래그 던지기 & 흔들기 지원)</span>
+          <span>✋ 주사위를 집어 올려 던지거나 떨어뜨려 보세요 (기기 흔들기도 지원)</span>
         </div>
       </div>
 
