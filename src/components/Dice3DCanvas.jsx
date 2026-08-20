@@ -85,16 +85,16 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
   const recentWorldHistory = useRef([])
   const raycasterRef = useRef(new THREE.Raycaster())
 
-  // Physics state for tray simulation
+  // Physics state for 2x enlarged tray simulation
   const physicsRef = useRef({
     pos: new THREE.Vector3(0, 0.55, 0),
     vel: new THREE.Vector3(0, 0, 0),
     rotVel: new THREE.Vector3(0, 0, 0),
     inMotion: false,
     groundY: 0.55,
-    liftY: 3.2, // Lift height when held in the air
-    boundX: 3.1,
-    boundZ: 3.1,
+    liftY: 3.4,
+    boundX: 7.1, // 2x enlarged boundary
+    boundZ: 7.1,
     holdTilt: new THREE.Vector2(0, 0),
   })
 
@@ -187,18 +187,18 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     return mesh
   }
 
-  // Create 3D Dice Tray / Box
+  // Create 2x Enlarged 3D Dice Tray / Box
   const createDiceTray = () => {
     const trayGroup = new THREE.Group()
 
-    const TRAY_SIZE = 7.8
-    const WALL_HEIGHT = 1.15
-    const WALL_THICKNESS = 0.45
+    const TRAY_SIZE = 15.6 // 2x enlarged tray size
+    const WALL_HEIGHT = 1.35
+    const WALL_THICKNESS = 0.6
 
     // Floor (Felt Velvet Mat)
     const floorGeo = new THREE.BoxGeometry(TRAY_SIZE, 0.2, TRAY_SIZE)
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x1e1b4b,
+      color: 0x1e1b4b, // Deep indigo velvet
       roughness: 0.9,
       metalness: 0.05,
     })
@@ -208,7 +208,7 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     trayGroup.add(floorMesh)
 
     // Inner tray border line
-    const borderGeo = new THREE.BoxGeometry(TRAY_SIZE - 0.3, 0.21, TRAY_SIZE - 0.3)
+    const borderGeo = new THREE.BoxGeometry(TRAY_SIZE - 0.4, 0.21, TRAY_SIZE - 0.4)
     const borderMat = new THREE.MeshStandardMaterial({
       color: 0x312e81,
       roughness: 0.75,
@@ -265,7 +265,7 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     return trayGroup
   }
 
-  // Setup Three.js Scene with 2x Zoom-Out
+  // Setup Three.js Scene
   useEffect(() => {
     const container = mountRef.current
     if (!container) return
@@ -276,10 +276,9 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     const scene = new THREE.Scene()
     sceneRef.current = scene
 
-    // 2x Zoomed-out Perspective Top-Down Camera
-    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 200)
-    // 2x zoom-out distance: placed higher and further back
-    camera.position.set(0, 24.0, 12.0)
+    // Perspective Top-Down Camera covering 2x enlarged board
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 200)
+    camera.position.set(0, 25.0, 13.0)
     camera.lookAt(0, 0.1, 0)
     cameraRef.current = camera
 
@@ -297,24 +296,24 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     scene.add(ambientLight)
 
     const topLight = new THREE.DirectionalLight(0xffffff, 2.3)
-    topLight.position.set(6, 25, 10)
+    topLight.position.set(10, 35, 15)
     topLight.castShadow = true
-    topLight.shadow.mapSize.width = 1024
-    topLight.shadow.mapSize.height = 1024
+    topLight.shadow.mapSize.width = 2048
+    topLight.shadow.mapSize.height = 2048
     topLight.shadow.camera.near = 0.5
-    topLight.shadow.camera.far = 60
-    topLight.shadow.camera.left = -10
-    topLight.shadow.camera.right = 10
-    topLight.shadow.camera.top = 10
-    topLight.shadow.camera.bottom = -10
+    topLight.shadow.camera.far = 80
+    topLight.shadow.camera.left = -16
+    topLight.shadow.camera.right = 16
+    topLight.shadow.camera.top = 16
+    topLight.shadow.camera.bottom = -16
     topLight.shadow.bias = -0.001
     scene.add(topLight)
 
     const fillLight = new THREE.DirectionalLight(0x818cf8, 0.8)
-    fillLight.position.set(-8, 15, -6)
+    fillLight.position.set(-15, 20, -12)
     scene.add(fillLight)
 
-    // Add 3D Dice Tray (Box)
+    // Add 2x Enlarged 3D Dice Tray (Box)
     const tray = createDiceTray()
     scene.add(tray)
 
@@ -362,9 +361,9 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
         if (p.pos.y <= p.groundY) {
           p.pos.y = p.groundY
           p.vel.y = -p.vel.y * 0.44 // bounce
-          p.vel.x *= 0.90 // floor friction
-          p.vel.z *= 0.90
-          p.rotVel.multiplyScalar(0.86)
+          p.vel.x *= 0.92 // floor friction
+          p.vel.z *= 0.92
+          p.rotVel.multiplyScalar(0.88)
         }
 
         // Wall collisions (X-bounds)
@@ -446,21 +445,21 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
       const p = physicsRef.current
       p.inMotion = true
 
-      // Launch upward impulse inside tray
+      // Launch impulse across 2x enlarged arena
       p.pos.set(
-        (Math.random() - 0.5) * 1.5,
-        2.2 + Math.random() * 0.8,
-        (Math.random() - 0.5) * 1.5
+        (Math.random() - 0.5) * 3.0,
+        2.5 + Math.random() * 1.0,
+        (Math.random() - 0.5) * 3.0
       )
       p.vel.set(
-        (Math.random() - 0.5) * 14,
-        7 + Math.random() * 4,
-        (Math.random() - 0.5) * 14
+        (Math.random() - 0.5) * 22,
+        8 + Math.random() * 4.5,
+        (Math.random() - 0.5) * 22
       )
       p.rotVel.set(
-        (Math.random() - 0.5) * 45,
-        (Math.random() - 0.5) * 45,
-        (Math.random() - 0.5) * 45
+        (Math.random() - 0.5) * 50,
+        (Math.random() - 0.5) * 50,
+        (Math.random() - 0.5) * 50
       )
     }
   }, [isRolling])
@@ -546,8 +545,8 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
       const dx = last.x - first.x
       const dz = last.z - first.z
 
-      throwVx = (dx / dt) * 1.1
-      throwVz = (dz / dt) * 1.1
+      throwVx = (dx / dt) * 1.15
+      throwVz = (dz / dt) * 1.15
     }
 
     const speed = Math.hypot(throwVx, throwVz)
@@ -555,16 +554,16 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     p.inMotion = true
 
     if (speed > 1.2) {
-      // Thrown with velocity
+      // Thrown with velocity across the large tray
       p.vel.set(
-        THREE.MathUtils.clamp(throwVx, -18, 18),
-        3.0 + Math.random() * 2.5, // arc upward toss
-        THREE.MathUtils.clamp(throwVz, -18, 18)
+        THREE.MathUtils.clamp(throwVx, -25, 25),
+        4.0 + Math.random() * 3.0,
+        THREE.MathUtils.clamp(throwVz, -25, 25)
       )
       p.rotVel.set(
-        throwVz * 2.5 + (Math.random() - 0.5) * 25,
-        (Math.random() - 0.5) * 40,
-        -throwVx * 2.5 + (Math.random() - 0.5) * 25
+        throwVz * 2.5 + (Math.random() - 0.5) * 30,
+        (Math.random() - 0.5) * 50,
+        -throwVx * 2.5 + (Math.random() - 0.5) * 30
       )
       if (onThrow && !isRolling) {
         onThrow()
@@ -572,7 +571,7 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     } else {
       // Dropped from lifted height
       p.vel.set((Math.random() - 0.5) * 2.0, -1.5, (Math.random() - 0.5) * 2.0)
-      p.rotVel.set((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12)
+      p.rotVel.set((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15)
       if (onThrow && !isRolling) {
         onThrow()
       }
@@ -587,7 +586,7 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
-      title="주사위를 바닥에서 집어 올려 던지거나 떨어뜨려 굴려보세요"
+      title="넓어진 상자 안에서 주사위를 집어 들어올려 던지거나 떨어뜨려보세요"
     />
   )
 }
