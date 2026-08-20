@@ -43,36 +43,90 @@ export default function DiceRoller() {
   }, [])
 
   const enableMotionListener = () => {
-    let lastX, lastY, lastZ
-    let lastTime = 0
-    const SHAKE_THRESHOLD = 16
+    // Gravity isolation filter for devices where event.acceleration is null
+    const gravity = { x: 0, y: 0, z: 0 }
+    let lastTriggerTime = 0
+    const motionHistory = []
+
+    // Calibrated thresholds for intentional dice throwing flicks:
+    // - Idle/holding tremor: < 1.5 m/s²
+    // - Walking/normal handling: 3 ~ 8 m/s²
+    // - Intentional dice-throwing flick gesture: >= 22 ~ 28 m/s²
+    const SHAKE_PEAK_THRESHOLD = 22.0 // m/s²
+    const HARD_THROW_THRESHOLD = 28.0 // m/s²
+    const COOLDOWN_MS = 1400 // 1.4s debounce cooldown
 
     const handleMotion = (event) => {
-      const current = event.accelerationIncludingGravity
-      if (!current) return
+      const now = performance.now()
+      if (now - lastTriggerTime < COOLDOWN_MS || isRollingRef.current) return
 
-      const currentTime = Date.now()
-      if (currentTime - lastTime > 100) {
-        const diffTime = currentTime - lastTime
-        lastTime = currentTime
+      let ax = 0
+      let ay = 0
+      let az = 0
 
-        if (lastX !== undefined) {
-          const deltaX = Math.abs(current.x - lastX)
-          const deltaY = Math.abs(current.y - lastY)
-          const deltaZ = Math.abs(current.z - lastZ)
-          const speed = ((deltaX + deltaY + deltaZ) / diffTime) * 10000
+      // 1. Primary: Use hardware-isolated linear acceleration (excludes gravity)
+      if (
+        event.acceleration &&
+        event.acceleration.x !== null &&
+        typeof event.acceleration.x === 'number'
+      ) {
+        ax = event.acceleration.x || 0
+        ay = event.acceleration.y || 0
+        az = event.acceleration.z || 0
+      } else if (event.accelerationIncludingGravity) {
+        // 2. Fallback: High-Pass Filter (HPF) on raw acceleration
+        const raw = event.accelerationIncludingGravity
+        if (typeof raw.x !== 'number') return
 
-          if (speed > SHAKE_THRESHOLD) {
-            setShakeCount((prev) => prev + 1)
-            if (!isRollingRef.current) {
-              rollAllDice()
-            }
+        const alpha = 0.82
+        gravity.x = alpha * gravity.x + (1 - alpha) * (raw.x || 0)
+        gravity.y = alpha * gravity.y + (1 - alpha) * (raw.y || 0)
+        gravity.z = alpha * gravity.z + (1 - alpha) * (raw.z || 0)
+
+        ax = (raw.x || 0) - gravity.x
+        ay = (raw.y || 0) - gravity.y
+        az = (raw.z || 0) - gravity.z
+      } else {
+        return
+      }
+
+      // Linear acceleration magnitude
+      const magnitude = Math.hypot(ax, ay, az)
+
+      // Maintain a sliding window of recent samples (last 350ms)
+      motionHistory.push({ mag: magnitude, time: now, ax, ay, az })
+      while (motionHistory.length > 0 && now - motionHistory[0].time > 350) {
+        motionHistory.shift()
+      }
+
+      // Check for intentional throw/shake gesture
+      let isThrowDetected = false
+
+      if (magnitude >= HARD_THROW_THRESHOLD) {
+        // Decisive strong throwing flick
+        isThrowDetected = true
+      } else if (magnitude >= SHAKE_PEAK_THRESHOLD) {
+        // Count distinct peaks or reversals in the 350ms window
+        let peakCount = 0
+        for (let i = 1; i < motionHistory.length - 1; i++) {
+          const prev = motionHistory[i - 1].mag
+          const curr = motionHistory[i].mag
+          const next = motionHistory[i + 1].mag
+          if (curr > prev && curr > next && curr >= 18.0) {
+            peakCount++
           }
         }
 
-        lastX = current.x
-        lastY = current.y
-        lastZ = current.z
+        if (peakCount >= 2 || motionHistory.some((s) => s.mag >= HARD_THROW_THRESHOLD)) {
+          isThrowDetected = true
+        }
+      }
+
+      if (isThrowDetected) {
+        lastTriggerTime = now
+        motionHistory.length = 0
+        setShakeCount((prev) => prev + 1)
+        rollAllDice()
       }
     }
 
@@ -195,7 +249,7 @@ export default function DiceRoller() {
 
       {shakeEnabled && !needsPermission && (
         <div className="sensor-badge">
-          <span className="sensor-indicator active" /> 기기 흔들기 감지 중 (흔든 횟수: {shakeCount})
+          <span className="sensor-indicator active" /> 던지듯 흔들기 감지 활성화 (감지 횟수: {shakeCount})
         </div>
       )}
 
