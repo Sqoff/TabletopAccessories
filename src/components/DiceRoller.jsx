@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import Dice3DCanvas from './Dice3DCanvas.jsx'
 import './DiceRoller.css'
+import './Dice3DCanvas.css'
 
 const PRESET_DICE = [
   { label: 'd2 (동전)', sides: 2 },
@@ -142,8 +144,8 @@ export default function DiceRoller() {
   return (
     <div className="dice-roller">
       <div className="dice-roller__header">
-        <h2>{sides}면체 주사위</h2>
-        <p>스마트폰을 흔들거나 아래 버튼/주사위를 터치하여 굴리세요.</p>
+        <h2>{sides}면체 3D 주사위</h2>
+        <p>스마트폰을 흔들거나, 주사위를 마우스/터치로 튕겨서 던져보세요.</p>
       </div>
 
       {needsPermission && (
@@ -191,21 +193,17 @@ export default function DiceRoller() {
         </div>
       </form>
 
-      {/* 3D Rolling Stage */}
-      <div
-        className={`dice-stage ${isRolling ? 'rolling' : ''}`}
-        onClick={() => rollDice(sides)}
-        role="button"
-        tabIndex={0}
-        aria-label="주사위 던지기"
-      >
-        <div className="dice-shape-3d">
-          <div className="dice-face dice-face--front">
-            <span className="dice-num">{displayNumber}</span>
-            <span className="dice-sides-tag">d{sides}</span>
-          </div>
+      {/* 3D WebGL Dice Stage */}
+      <div className="dice-stage-3d-wrapper">
+        <Dice3DCanvas
+          sides={sides}
+          isRolling={isRolling}
+          currentNumber={displayNumber}
+          onThrow={() => rollDice(sides)}
+        />
+        <div className="dice-stage-hint">
+          <span>🔄 3D 회전 드래그 & 빠른 튕기기로 던지기 가능</span>
         </div>
-        <div className="dice-shadow" />
       </div>
 
       <div className="dice-roller__action">

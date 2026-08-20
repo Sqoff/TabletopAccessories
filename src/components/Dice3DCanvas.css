@@ -1,0 +1,23 @@
+.dice-3d-canvas-container {
+  width: 240px;
+  height: 240px;
+  margin: 0 auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dice-3d-canvas-container:active {
+  cursor: grabbing;
+}
+
+.dice-3d-canvas-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  filter: drop-shadow(0 12px 20px rgba(109, 40, 217, 0.25));
+}

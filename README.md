@@ -1,10 +1,17 @@
 # TabletopAccessories
 
-보드게임 및 테이블탑 플레이를 위한 반응형 웹 액세서리 도구 모음입니다. React + Vite로 구현되었습니다.
+보드게임 및 테이블탑 플레이를 위한 반응형 웹 액세서리 도구 모음입니다. React + Three.js + Vite로 구현되었습니다.
+
+## 🌐 배포 주소 (Live Demo)
+
+👉 **[https://sqoff.github.io/TabletopAccessories/](https://sqoff.github.io/TabletopAccessories/)**
+
+---
 
 ## 🚀 기술 스택
 
 - React 18
+- Three.js
 - Vite 5
 - Node.js >= 24
 
@@ -47,10 +54,12 @@ npm run preview
 - 여러 명이 화면에 동시에 손가락을 대면 2.5초 카운트다운 후 1명을 무작위로 당첨자로 선정합니다.
 - 데스크탑 환경에서는 마우스 클릭으로 터치 포인트를 추가하여 시뮬레이션할 수 있습니다.
 
-### 4. N면체 주사위 롤러 & 쉐이크 (N-Sided Dice Roller)
-- **2~N면체 주사위 지원** (d2 동전, d4, d6, d8, d10, d12, d20, d100 및 임의의 커스텀 N면체)
-- **스마트폰 흔들기 감지** (`DeviceMotionEvent` 가속도 센서 연동, iOS 권한 허용 지원)
-- 굴리기 애니메이션, 윗면 결과 감지 및 최근 굴린 기록 히스토리 제공
+### 4. 3D N면체 주사위 롤러 & 쉐이크 (3D Dice Roller)
+- **Three.js 기반 3D 다면체 지오메트리 렌더링**
+- **2~N면체 주사위 지원**: d2(동전), d4(사면체), d6(육면체), d8(팔면체), d10(십면체), d12(십이면체), d20(이십면체), d100 및 사용자 지정 $N$면체
+- **인터랙티브 3D 조작**: 마우스/터치 드래그로 360° 자유 회전 및 빠른 튕기기(Flick)로 던지기 지원
+- **스마트폰 흔들기 감지**: `DeviceMotionEvent` 가속도 센서 연동 (iOS 권한 요청 지원)
+- 굴리기 3D 회전 애니메이션, 결과값 도출 및 최근 기록 히스토리
 
 ---
 
@@ -66,10 +75,11 @@ TabletopAccessories/
     ├── App.jsx
     ├── App.css
     └── components/
-        ├── MainMenu.jsx / MainMenu.css     # 초기 진입 허브 화면
-        ├── TopBar.jsx / TopBar.css         # 상단 네비게이션 & 뒤로가기
-        ├── Dial.jsx / Dial.css             # 기본 다이얼 SVG 컴포넌트
-        ├── DualDialView.jsx / .css         # 이중 다이얼 뷰
-        ├── MultiTouchPicker.jsx / .css     # 멀티터치 순서 뽑기 뷰
-        └── DiceRoller.jsx / .css           # N면체 주사위 & 흔들기 뷰
+        ├── MainMenu.jsx / MainMenu.css         # 초기 진입 허브 화면
+        ├── TopBar.jsx / TopBar.css             # 상단 네비게이션 & 뒤로가기
+        ├── Dial.jsx / Dial.css                 # 기본 다이얼 SVG 컴포넌트
+        ├── DualDialView.jsx / .css             # 이중 다이얼 뷰
+        ├── MultiTouchPicker.jsx / .css         # 멀티터치 순서 뽑기 뷰
+        ├── DiceRoller.jsx / .css               # 주사위 제어 & 설정 뷰
+        └── Dice3DCanvas.jsx / .css             # Three.js 기반 3D 주사위 캔버스
 ```
