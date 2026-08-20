@@ -15,12 +15,11 @@ const PRESET_DICE = [
 ]
 
 export default function DiceRoller() {
-  const [sides, setSides] = useState(6)
+  const [diceList, setDiceList] = useState([
+    { id: 'dice-1', sides: 6, displayNumber: 6, result: 6 },
+  ])
   const [customSides, setCustomSides] = useState('')
-  const [result, setResult] = useState(null)
   const [isRolling, setIsRolling] = useState(false)
-  const [history, setHistory] = useState([])
-  const [displayNumber, setDisplayNumber] = useState(6)
   const [shakeEnabled, setShakeEnabled] = useState(false)
   const [needsPermission, setNeedsPermission] = useState(false)
   const [shakeCount, setShakeCount] = useState(0)
@@ -28,8 +27,8 @@ export default function DiceRoller() {
   const isRollingRef = useRef(false)
   isRollingRef.current = isRolling
 
-  const sidesRef = useRef(sides)
-  sidesRef.current = sides
+  const diceListRef = useRef(diceList)
+  diceListRef.current = diceList
 
   // Check iOS permission requirement on mount
   useEffect(() => {
@@ -66,7 +65,7 @@ export default function DiceRoller() {
           if (speed > SHAKE_THRESHOLD) {
             setShakeCount((prev) => prev + 1)
             if (!isRollingRef.current) {
-              rollDice(sidesRef.current)
+              rollAllDice()
             }
           }
         }
@@ -97,10 +96,39 @@ export default function DiceRoller() {
     }
   }
 
-  const rollDice = (nSides = sides) => {
+  // Add a new die to the tray
+  const addDie = (sides) => {
+    if (diceList.length >= 12) {
+      alert('동시에 최대 12개까지 주사위를 추가할 수 있습니다.')
+      return
+    }
+    const newId = `dice-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+    setDiceList((prev) => [
+      ...prev,
+      { id: newId, sides, displayNumber: sides, result: sides },
+    ])
+  }
+
+  // Remove a specific die
+  const removeDie = (id) => {
+    if (diceList.length <= 1) {
+      alert('최소 1개의 주사위가 필요합니다.')
+      return
+    }
+    setDiceList((prev) => prev.filter((d) => d.id !== id))
+  }
+
+  // Reset to single d6
+  const resetToOneDie = () => {
+    setDiceList([
+      { id: `dice-${Date.now()}`, sides: 6, displayNumber: 6, result: 6 },
+    ])
+  }
+
+  // Roll all active dice together
+  const rollAllDice = () => {
     if (isRolling) return
     setIsRolling(true)
-    setResult(null)
 
     if (navigator.vibrate) {
       navigator.vibrate(80)
@@ -109,20 +137,27 @@ export default function DiceRoller() {
     let iterations = 0
     const maxIterations = 20
     const interval = setInterval(() => {
-      const tempNum = Math.floor(Math.random() * nSides) + 1
-      setDisplayNumber(tempNum)
+      setDiceList((prev) =>
+        prev.map((d) => ({
+          ...d,
+          displayNumber: Math.floor(Math.random() * d.sides) + 1,
+        }))
+      )
       iterations++
 
       if (iterations >= maxIterations) {
         clearInterval(interval)
-        const finalNum = Math.floor(Math.random() * nSides) + 1
-        setDisplayNumber(finalNum)
-        setResult(finalNum)
+        setDiceList((prev) =>
+          prev.map((d) => {
+            const finalNum = Math.floor(Math.random() * d.sides) + 1
+            return {
+              ...d,
+              displayNumber: finalNum,
+              result: finalNum,
+            }
+          })
+        )
         setIsRolling(false)
-        setHistory((prev) => [
-          { id: Date.now(), sides: nSides, result: finalNum, time: new Date().toLocaleTimeString() },
-          ...prev.slice(0, 9),
-        ])
 
         if (navigator.vibrate) {
           navigator.vibrate([50, 50, 150])
@@ -135,17 +170,20 @@ export default function DiceRoller() {
     e.preventDefault()
     const num = parseInt(customSides, 10)
     if (num && num >= 2 && num <= 10000) {
-      setSides(num)
-      setResult(null)
-      setDisplayNumber(num)
+      addDie(num)
+      setCustomSides('')
     }
   }
+
+  // Calculate sum and statistics
+  const totalSum = diceList.reduce((acc, d) => acc + (d.result || 0), 0)
+  const isAllSettled = !isRolling
 
   return (
     <div className="dice-roller">
       <div className="dice-roller__header">
-        <h2>{sides}면체 3D 주사위</h2>
-        <p>스마트폰을 흔들거나, 주사위를 마우스/터치로 튕겨서 던져보세요.</p>
+        <h2>3D 다이스 트레이 ({diceList.length}개 주사위)</h2>
+        <p>아래 버튼을 눌러 주사위를 추가하고, 트레이 안에서 한꺼번에 굴려보세요.</p>
       </div>
 
       {needsPermission && (
@@ -161,24 +199,25 @@ export default function DiceRoller() {
         </div>
       )}
 
-      <div className="dice-roller__presets">
-        {PRESET_DICE.map((p) => (
-          <button
-            key={p.sides}
-            className={`preset-btn ${sides === p.sides ? 'active' : ''}`}
-            onClick={() => {
-              setSides(p.sides)
-              setResult(null)
-              setDisplayNumber(p.sides)
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
+      {/* Preset Dice Adding Buttons */}
+      <div className="dice-roller__presets-section">
+        <div className="presets-label">주사위 추가 (클릭 시 트레이에 추가):</div>
+        <div className="dice-roller__presets">
+          {PRESET_DICE.map((p) => (
+            <button
+              key={p.sides}
+              className="preset-btn add-btn"
+              onClick={() => addDie(p.sides)}
+              disabled={isRolling}
+            >
+              + {p.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <form className="dice-roller__custom" onSubmit={handleCustomSidesSubmit}>
-        <label htmlFor="custom-sides">커스텀 N면체 (2~10000):</label>
+        <label htmlFor="custom-sides">커스텀 N면체 추가 (2~10000):</label>
         <div className="custom-input-group">
           <input
             id="custom-sides"
@@ -188,55 +227,111 @@ export default function DiceRoller() {
             placeholder="예: 7, 30, 50"
             value={customSides}
             onChange={(e) => setCustomSides(e.target.value)}
+            disabled={isRolling}
           />
-          <button type="submit">적용</button>
+          <button type="submit" disabled={isRolling}>+ 추가</button>
         </div>
       </form>
 
-      {/* 3D WebGL Dice Stage */}
+      {/* Active Dice Tray Tag Manager */}
+      <div className="active-dice-tray-bar">
+        <div className="active-dice-list">
+          {diceList.map((d, index) => (
+            <div key={d.id} className="active-die-chip">
+              <span className="active-die-label">#{index + 1} d{d.sides}</span>
+              {diceList.length > 1 && (
+                <button
+                  className="active-die-del-btn"
+                  onClick={() => removeDie(d.id)}
+                  title="이 주사위 제거"
+                  disabled={isRolling}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {diceList.length > 1 && (
+          <button className="clear-all-dice-btn" onClick={resetToOneDie} disabled={isRolling}>
+            주사위 1개로 초기화
+          </button>
+        )}
+      </div>
+
+      {/* 3D WebGL Multi-Dice Stage */}
       <div className="dice-stage-3d-wrapper">
         <Dice3DCanvas
-          sides={sides}
+          diceList={diceList}
           isRolling={isRolling}
-          currentNumber={displayNumber}
-          onThrow={() => rollDice(sides)}
+          onThrow={rollAllDice}
         />
         <div className="dice-stage-hint">
-          <span>✋ 주사위를 집어 올려 던지거나 떨어뜨려 보세요 (기기 흔들기도 지원)</span>
+          <span>✋ 주사위를 집어 올려 던지거나, 기기를 흔들어 한꺼번에 굴려보세요</span>
         </div>
       </div>
 
       <div className="dice-roller__action">
         <button
           className="roll-main-btn"
-          onClick={() => rollDice(sides)}
+          onClick={rollAllDice}
           disabled={isRolling}
         >
-          {isRolling ? '굴러가는 중...' : `🎲 d${sides} 주사위 굴리기`}
+          {isRolling ? '굴러가는 중...' : `🎲 주사위 ${diceList.length}개 한꺼번에 굴리기`}
         </button>
       </div>
 
-      {result !== null && (
-        <div className="result-announcement">
-          <span className="result-label">결과값</span>
-          <span className="result-value">{result}</span>
-        </div>
-      )}
-
-      {history.length > 0 && (
-        <div className="roll-history">
-          <div className="roll-history__title">최근 굴린 기록</div>
-          <div className="roll-history__list">
-            {history.map((h) => (
-              <div key={h.id} className="history-chip">
-                <span className="chip-dice">d{h.sides}</span>
-                <span className="chip-arrow">→</span>
-                <span className="chip-num">{h.result}</span>
-              </div>
-            ))}
+      {/* All Objects Result Summary Board (Replaces Recent History) */}
+      <div className="multi-dice-results-board">
+        <div className="results-board__header">
+          <div className="results-board__title">
+            <span className="results-icon">📊</span>
+            <span>주사위 굴림 결과 ({diceList.length}개)</span>
           </div>
+          {isAllSettled && (
+            <div className="total-sum-badge">
+              <span className="sum-label">총합 (Sum)</span>
+              <span className="sum-value">{totalSum}</span>
+            </div>
+          )}
         </div>
-      )}
+
+        <div className="results-grid">
+          {diceList.map((d, index) => (
+            <div key={d.id} className="result-card">
+              <div className="result-card__top">
+                <span className="result-die-tag">d{d.sides}</span>
+                <span className="result-die-index">#{index + 1}</span>
+              </div>
+              <div className="result-card__body">
+                <span className={`result-number ${isRolling ? 'rolling' : ''}`}>
+                  {d.displayNumber}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {diceList.length > 1 && isAllSettled && (
+          <div className="results-stats-row">
+            <div className="stat-item">
+              <span className="stat-label">주사위 수:</span>
+              <span className="stat-val">{diceList.length}개</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">평균값:</span>
+              <span className="stat-val">{(totalSum / diceList.length).toFixed(1)}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">최소 / 최대:</span>
+              <span className="stat-val">
+                {Math.min(...diceList.map((d) => d.result || 0))} /{' '}
+                {Math.max(...diceList.map((d) => d.result || 0))}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
