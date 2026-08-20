@@ -25,7 +25,7 @@ function createNumberTexture(num, label = '', bgColor = '#7c3aed', textColor = '
   ctx.fillStyle = textColor
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  
+
   const str = String(num)
   if (str.length <= 2) {
     ctx.font = 'bold 110px system-ui, -apple-system, sans-serif'
@@ -57,6 +57,21 @@ function createNumberTexture(num, label = '', bgColor = '#7c3aed', textColor = '
   const texture = new THREE.CanvasTexture(canvas)
   texture.anisotropy = 4
   return texture
+}
+
+// Set fixed default orientation so numbers are face-front and readable without rotating constantly
+function setDefaultOrientation(mesh, nSides) {
+  if (!mesh) return
+  if (nSides === 2) {
+    // Coin: tilt slightly forward to display top face clearly
+    mesh.rotation.set(0.45, 0, 0)
+  } else if (nSides === 6) {
+    // Cube: gentle 3D perspective
+    mesh.rotation.set(0.2, 0.35, 0)
+  } else {
+    // Polyhedra: gentle angle
+    mesh.rotation.set(0.2, 0.25, 0)
+  }
 }
 
 export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow }) {
@@ -101,7 +116,6 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     } else if (nSides === 6) {
       // Cube (d6)
       geometry = new THREE.BoxGeometry(2, 2, 2)
-      // Standard opposite sides sum to 7: 1-6, 2-5, 3-4
       const faceNums = [1, 6, 2, 5, 3, 4]
       materials = faceNums.map((num) =>
         new THREE.MeshStandardMaterial({
@@ -126,7 +140,7 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
         flatShading: true,
       })
     } else if (nSides === 10) {
-      // d10: Bipyramid / Pentagonal Trapezohedron
+      // d10
       geometry = new THREE.CylinderGeometry(1.6, 1.6, 1.4, 10)
       const sideMat = new THREE.MeshStandardMaterial({
         map: createNumberTexture(targetNumber || 10, 'd10', '#9333ea'),
@@ -150,8 +164,7 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
         flatShading: true,
       })
     } else {
-      // Custom N (d100, d30, d7, etc.)
-      const segments = Math.min(Math.max(nSides, 8), 32)
+      // Custom N
       geometry = new THREE.DodecahedronGeometry(1.75, Math.min(Math.floor(nSides / 20), 2))
       materials = new THREE.MeshStandardMaterial({
         map: createNumberTexture(targetNumber || nSides, `d${nSides}`, '#6d28d9'),
@@ -203,23 +216,15 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     dirLight2.position.set(-5, -4, -3)
     scene.add(dirLight2)
 
-    // Initial Dice Mesh
+    // Initial Dice Mesh (Stationary)
     const mesh = createDiceMesh(sides, currentNumber)
+    setDefaultOrientation(mesh, sides)
     diceMeshRef.current = mesh
     scene.add(mesh)
 
-    // Render loop
+    // Render loop (no auto-rotation when idle)
     const animate = () => {
       animationFrameRef.current = requestAnimationFrame(animate)
-
-      if (diceMeshRef.current) {
-        if (!isRolling && !isDraggingRef.current) {
-          // Subtle idle float
-          diceMeshRef.current.rotation.y += 0.005
-          diceMeshRef.current.rotation.x += 0.002
-        }
-      }
-
       renderer.render(scene, camera)
     }
     animate()
@@ -257,6 +262,7 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     }
 
     const newMesh = createDiceMesh(sides, currentNumber)
+    setDefaultOrientation(newMesh, sides)
     diceMeshRef.current = newMesh
     sceneRef.current.add(newMesh)
   }, [sides, currentNumber])
@@ -293,12 +299,13 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
         } else {
           if (diceMeshRef.current) {
             diceMeshRef.current.position.y = 0
+            setDefaultOrientation(diceMeshRef.current, sides)
           }
         }
       }
       requestAnimationFrame(rollLoop)
     }
-  }, [isRolling])
+  }, [isRolling, sides])
 
   // Touch / Mouse Drag & Toss Interaction
   const handlePointerDown = (e) => {
@@ -333,7 +340,6 @@ export default function Dice3DCanvas({ sides, isRolling, currentNumber, onThrow 
     isDraggingRef.current = false
 
     const speed = Math.hypot(dragVelocity.current.x, dragVelocity.current.y)
-    // If flicked fast enough, trigger a toss/roll!
     if (speed > 0.6 && onThrow && !isRolling) {
       onThrow()
     }
