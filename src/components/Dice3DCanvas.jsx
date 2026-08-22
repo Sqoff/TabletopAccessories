@@ -626,11 +626,17 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow, rollTrigger
   // Pointer Down: Grab clicked or closest die and start holding
   const handlePointerDown = (e) => {
     if (isRolling || diceMapRef.current.size === 0) return
-
     if (!mountRef.current || !cameraRef.current) return
+
+    try {
+      if (e.target && e.target.setPointerCapture) {
+        e.target.setPointerCapture(e.pointerId)
+      }
+    } catch (_) {}
+
     const rect = mountRef.current.getBoundingClientRect()
-    const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1
-    const ndcY = -(((clientY - rect.top) / rect.height) * 2 - 1)
+    const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
+    const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1)
     raycasterRef.current.setFromCamera({ x: ndcX, y: ndcY }, cameraRef.current)
 
     // Check direct mesh raycasting
@@ -724,7 +730,7 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow, rollTrigger
     }
 
     // Sweeping check: touch or brush against nearby resting dice to pick them up
-    const SWEEP_DISTANCE = 2.1
+    const SWEEP_DISTANCE = 2.2
     let newlyGrabbed = false
 
     for (const [id, { physics }] of diceMapRef.current.entries()) {
@@ -773,7 +779,13 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow, rollTrigger
   }
 
   // Pointer Up: Release and throw ONLY the held/grabbed dice
-  const handlePointerUp = () => {
+  const handlePointerUp = (e) => {
+    try {
+      if (e && e.target && e.target.releasePointerCapture && e.pointerId) {
+        e.target.releasePointerCapture(e.pointerId)
+      }
+    } catch (_) {}
+
     if (!isDraggingRef.current) return
     isDraggingRef.current = false
 
@@ -846,6 +858,7 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow, rollTrigger
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       title="주사위를 집어 올려 던지거나 스쳐서 함께 굴려보세요"
     />
   )
