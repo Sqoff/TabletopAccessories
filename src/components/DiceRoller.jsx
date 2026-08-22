@@ -19,11 +19,13 @@ export default function DiceRoller() {
     { id: 'dice-1', sides: 6, displayNumber: 6, result: 6 },
   ])
   const [customSides, setCustomSides] = useState('')
-  const [isRolling, setIsRolling] = useState(false)
+  const [rollingDiceIds, setRollingDiceIds] = useState(new Set())
+  const [rollTrigger, setRollTrigger] = useState(null)
   const [shakeEnabled, setShakeEnabled] = useState(false)
   const [needsPermission, setNeedsPermission] = useState(false)
   const [shakeCount, setShakeCount] = useState(0)
 
+  const isRolling = rollingDiceIds.size > 0
   const isRollingRef = useRef(false)
   isRollingRef.current = isRolling
 
@@ -179,23 +181,41 @@ export default function DiceRoller() {
     ])
   }
 
-  // Roll all active dice together
-  const rollAllDice = () => {
-    if (isRolling) return
-    setIsRolling(true)
+  // Roll specific dice (by default all dice)
+  const rollDice = (targetIds, triggerCanvasPhysics = true) => {
+    if (rollingDiceIds.size > 0) return
+
+    const validIds =
+      targetIds && targetIds.length > 0
+        ? targetIds
+        : diceListRef.current.map((d) => d.id)
+
+    setRollingDiceIds(new Set(validIds))
+
+    if (triggerCanvasPhysics) {
+      setRollTrigger({
+        timestamp: Date.now(),
+        diceIds: validIds,
+      })
+    }
 
     if (navigator.vibrate) {
-      navigator.vibrate(80)
+      navigator.vibrate(validIds.length > 1 ? 90 : 60)
     }
 
     let iterations = 0
-    const maxIterations = 20
+    const maxIterations = 18
     const interval = setInterval(() => {
       setDiceList((prev) =>
-        prev.map((d) => ({
-          ...d,
-          displayNumber: Math.floor(Math.random() * d.sides) + 1,
-        }))
+        prev.map((d) => {
+          if (validIds.includes(d.id)) {
+            return {
+              ...d,
+              displayNumber: Math.floor(Math.random() * d.sides) + 1,
+            }
+          }
+          return d
+        })
       )
       iterations++
 
@@ -203,21 +223,36 @@ export default function DiceRoller() {
         clearInterval(interval)
         setDiceList((prev) =>
           prev.map((d) => {
-            const finalNum = Math.floor(Math.random() * d.sides) + 1
-            return {
-              ...d,
-              displayNumber: finalNum,
-              result: finalNum,
+            if (validIds.includes(d.id)) {
+              const finalNum = Math.floor(Math.random() * d.sides) + 1
+              return {
+                ...d,
+                displayNumber: finalNum,
+                result: finalNum,
+              }
             }
+            return d
           })
         )
-        setIsRolling(false)
+        setRollingDiceIds(new Set())
 
         if (navigator.vibrate) {
-          navigator.vibrate([50, 50, 150])
+          navigator.vibrate([40, 40, 100])
         }
       }
     }, 50)
+  }
+
+  // Roll all active dice together
+  const rollAllDice = () => {
+    rollDice(diceListRef.current.map((d) => d.id), true)
+  }
+
+  // Handle throw from 3D canvas (only throws the held dice, canvas physics already applied)
+  const handleCanvasThrow = (thrownIds) => {
+    if (thrownIds && thrownIds.length > 0) {
+      rollDice(thrownIds, false)
+    }
   }
 
   const handleCustomSidesSubmit = (e) => {
@@ -318,10 +353,11 @@ export default function DiceRoller() {
         <Dice3DCanvas
           diceList={diceList}
           isRolling={isRolling}
-          onThrow={rollAllDice}
+          rollTrigger={rollTrigger}
+          onThrow={handleCanvasThrow}
         />
         <div className="dice-stage-hint">
-          <span>✋ 주사위를 집어 올려 던지거나, 기기를 흔들어 한꺼번에 굴려보세요</span>
+          <span>✋ 주사위를 집어 올려 던지거나, 잡은 채 다른 주사위를 스쳐 함께 던져보세요</span>
         </div>
       </div>
 
@@ -358,7 +394,7 @@ export default function DiceRoller() {
                 <span className="result-die-index">#{index + 1}</span>
               </div>
               <div className="result-card__body">
-                <span className={`result-number ${isRolling ? 'rolling' : ''}`}>
+                <span className={`result-number ${rollingDiceIds.has(d.id) ? 'rolling' : ''}`}>
                   {d.displayNumber}
                 </span>
               </div>

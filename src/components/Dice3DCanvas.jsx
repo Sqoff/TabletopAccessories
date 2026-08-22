@@ -89,7 +89,7 @@ function setRestingOrientation(mesh, nSides) {
   }
 }
 
-export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
+export default function Dice3DCanvas({ diceList, isRolling, onThrow, rollTrigger }) {
   const mountRef = useRef(null)
   const sceneRef = useRef(null)
   const rendererRef = useRef(null)
@@ -97,7 +97,8 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
   const diceMapRef = useRef(new Map()) // id -> { mesh, physics }
   const animationFrameRef = useRef(null)
   const isDraggingRef = useRef(false)
-  const draggedDieIdRef = useRef(null)
+  const draggedDieIdsRef = useRef(new Set())
+  const dragCenterPointRef = useRef(new THREE.Vector3())
   const recentWorldHistory = useRef([])
   const raycasterRef = useRef(new THREE.Raycaster())
 
@@ -331,16 +332,61 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
 
       const diceEntries = Array.from(diceMapRef.current.entries())
 
-      // 1. Update individual physics
+      // 1. Continuous sweeping detection during drag (picks up resting dice when brushed past)
+      if (isDraggingRef.current && draggedDieIdsRef.current.size > 0) {
+        const SWEEP_RADIUS = 2.1
+        let brushedAny = false
+        diceEntries.forEach(([id, { physics }]) => {
+          if (!draggedDieIdsRef.current.has(id)) {
+            const distToHandCenter = Math.hypot(
+              physics.pos.x - dragCenterPointRef.current.x,
+              physics.pos.z - dragCenterPointRef.current.z
+            )
+            let inRange = distToHandCenter < SWEEP_RADIUS
+
+            if (!inRange) {
+              for (const heldId of draggedDieIdsRef.current) {
+                const heldData = diceMapRef.current.get(heldId)
+                if (heldData) {
+                  const d = Math.hypot(
+                    physics.pos.x - heldData.physics.pos.x,
+                    physics.pos.z - heldData.physics.pos.z
+                  )
+                  if (d < SWEEP_RADIUS) {
+                    inRange = true
+                    break
+                  }
+                }
+              }
+            }
+
+            if (inRange) {
+              draggedDieIdsRef.current.add(id)
+              physics.inMotion = false
+              physics.vel.set(0, 0, 0)
+              physics.rotVel.set(0, 0, 0)
+              brushedAny = true
+            }
+          }
+        })
+
+        if (brushedAny && navigator.vibrate) {
+          navigator.vibrate(20)
+        }
+      }
+
+      // 2. Update individual physics
       diceEntries.forEach(([id, { mesh, physics }]) => {
         const p = physics
 
-        if (isDraggingRef.current && draggedDieIdRef.current === id) {
-          // Lifting up smoothly from floor to lift height
-          p.pos.y = THREE.MathUtils.lerp(p.pos.y, p.liftY, 0.14)
+        if (isDraggingRef.current && draggedDieIdsRef.current.has(id)) {
+          // Held in hand: lift up smoothly and cluster comfortably around drag center
+          p.pos.y = THREE.MathUtils.lerp(p.pos.y, p.liftY, 0.16)
+          p.pos.x = THREE.MathUtils.lerp(p.pos.x, dragCenterPointRef.current.x, 0.22)
+          p.pos.z = THREE.MathUtils.lerp(p.pos.z, dragCenterPointRef.current.z, 0.22)
           mesh.position.copy(p.pos)
-          mesh.rotation.x = 0.35 + p.holdTilt.y * 0.4
-          mesh.rotation.z = -p.holdTilt.x * 0.4
+          mesh.rotation.x = THREE.MathUtils.lerp(mesh.rotation.x, 0.35 + p.holdTilt.y * 0.4, 0.2)
+          mesh.rotation.z = THREE.MathUtils.lerp(mesh.rotation.z, -p.holdTilt.x * 0.4, 0.2)
         } else if (p.inMotion) {
           // Falling with gravity
           p.vel.y -= 26 * dt
@@ -390,35 +436,54 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
             const dData = diceList?.find((d) => d.id === id)
             if (dData) setRestingOrientation(mesh, dData.sides)
           }
+        } else {
+          // Stationary at resting position on tray floor
+          p.pos.y = p.groundY
+          mesh.position.copy(p.pos)
         }
       })
 
-      // 2. Inter-dice collision & repulsion
+      // 3. Inter-dice collision & repulsion
       for (let i = 0; i < diceEntries.length; i++) {
         for (let j = i + 1; j < diceEntries.length; j++) {
-          const p1 = diceEntries[i][1].physics
-          const p2 = diceEntries[j][1].physics
-          const mesh1 = diceEntries[i][1].mesh
-          const mesh2 = diceEntries[j][1].mesh
+          const [id1, { mesh: mesh1, physics: p1 }] = diceEntries[i]
+          const [id2, { mesh: mesh2, physics: p2 }] = diceEntries[j]
+
+          const isHeld1 = isDraggingRef.current && draggedDieIdsRef.current.has(id1)
+          const isHeld2 = isDraggingRef.current && draggedDieIdsRef.current.has(id2)
 
           const delta = p1.pos.clone().sub(p2.pos)
           const dist = delta.length()
           const minDist = 1.35
 
-          if (dist < minDist && dist > 0.01) {
+          if (dist < minDist && dist > 0.001) {
             const overlap = (minDist - dist) * 0.5
             const normal = delta.normalize()
-            p1.pos.addScaledVector(normal, overlap)
-            p2.pos.addScaledVector(normal, -overlap)
-            mesh1.position.copy(p1.pos)
-            mesh2.position.copy(p2.pos)
 
-            const relVel = p1.vel.clone().sub(p2.vel)
-            const dot = relVel.dot(normal)
-            if (dot < 0) {
-              const impulse = normal.multiplyScalar(-dot * 0.5)
-              p1.vel.add(impulse)
-              p2.vel.sub(impulse)
+            if (isHeld1 && isHeld2) {
+              // Both held in hand: gently push apart in horizontal plane to cluster naturally
+              p1.pos.x += normal.x * overlap
+              p1.pos.z += normal.z * overlap
+              p2.pos.x -= normal.x * overlap
+              p2.pos.z -= normal.z * overlap
+              mesh1.position.copy(p1.pos)
+              mesh2.position.copy(p2.pos)
+            } else if (!isHeld1 && !isHeld2) {
+              // Both in world: standard physical collision response
+              p1.pos.addScaledVector(normal, overlap)
+              p2.pos.addScaledVector(normal, -overlap)
+              mesh1.position.copy(p1.pos)
+              mesh2.position.copy(p2.pos)
+
+              const relVel = p1.vel.clone().sub(p2.vel)
+              const dot = relVel.dot(normal)
+              if (dot < 0) {
+                const impulse = normal.multiplyScalar(-dot * 0.5)
+                p1.vel.add(impulse)
+                p2.vel.sub(impulse)
+                if (p1.vel.length() > 0.3) p1.inMotion = true
+                if (p2.vel.length() > 0.3) p2.inMotion = true
+              }
             }
           }
         }
@@ -517,26 +582,32 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
     })
   }, [diceList])
 
-  // Trigger Rolling Physics Simulation for all dice
+  // Trigger Rolling Physics Simulation from external button/shake trigger
   useEffect(() => {
-    if (isRolling) {
-      const entries = Array.from(diceMapRef.current.values())
-      entries.forEach(({ physics }) => {
-        physics.inMotion = true
-        physics.pos.y = 2.4 + Math.random() * 1.2
-        physics.vel.set(
-          (Math.random() - 0.5) * 24,
-          8 + Math.random() * 5,
-          (Math.random() - 0.5) * 24
-        )
-        physics.rotVel.set(
-          (Math.random() - 0.5) * 55,
-          (Math.random() - 0.5) * 55,
-          (Math.random() - 0.5) * 55
-        )
+    if (rollTrigger && rollTrigger.timestamp) {
+      const targetIds =
+        rollTrigger.diceIds && rollTrigger.diceIds.length > 0
+          ? new Set(rollTrigger.diceIds)
+          : new Set(diceList.map((d) => d.id))
+
+      diceMapRef.current.forEach(({ physics }, id) => {
+        if (targetIds.has(id)) {
+          physics.inMotion = true
+          physics.pos.y = 2.4 + Math.random() * 1.2
+          physics.vel.set(
+            (Math.random() - 0.5) * 24,
+            8 + Math.random() * 5,
+            (Math.random() - 0.5) * 24
+          )
+          physics.rotVel.set(
+            (Math.random() - 0.5) * 55,
+            (Math.random() - 0.5) * 55,
+            (Math.random() - 0.5) * 55
+          )
+        }
       })
     }
-  }, [isRolling])
+  }, [rollTrigger])
 
   // Convert screen coords to 3D plane coords
   const get3DPlanePoint = (clientX, clientY, planeY = 2.5) => {
@@ -552,30 +623,66 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
     return hit ? target : null
   }
 
-  // Pointer Down: Grab clicked die or nearest die and lift
+  // Pointer Down: Grab clicked or closest die and start holding
   const handlePointerDown = (e) => {
     if (isRolling || diceMapRef.current.size === 0) return
-    isDraggingRef.current = true
 
-    const point3D = get3DPlanePoint(e.clientX, e.clientY, 0.55)
+    if (!mountRef.current || !cameraRef.current) return
+    const rect = mountRef.current.getBoundingClientRect()
+    const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1
+    const ndcY = -(((clientY - rect.top) / rect.height) * 2 - 1)
+    raycasterRef.current.setFromCamera({ x: ndcX, y: ndcY }, cameraRef.current)
+
+    // Check direct mesh raycasting
+    const meshes = []
+    const meshToId = new Map()
+    for (const [id, { mesh }] of diceMapRef.current.entries()) {
+      meshes.push(mesh)
+      meshToId.set(mesh, id)
+    }
+
+    const intersects = raycasterRef.current.intersectObjects(meshes, true)
     let chosenId = null
 
-    if (point3D) {
+    if (intersects.length > 0) {
+      let hitObj = intersects[0].object
+      while (hitObj && !meshToId.has(hitObj)) {
+        hitObj = hitObj.parent
+      }
+      if (hitObj && meshToId.has(hitObj)) {
+        chosenId = meshToId.get(hitObj)
+      }
+    }
+
+    const floorHit = get3DPlanePoint(e.clientX, e.clientY, 0.55)
+
+    if (!chosenId && floorHit) {
       let minDist = Infinity
       for (const [id, { physics }] of diceMapRef.current.entries()) {
-        const d = Math.hypot(physics.pos.x - point3D.x, physics.pos.z - point3D.z)
+        const d = Math.hypot(physics.pos.x - floorHit.x, physics.pos.z - floorHit.z)
         if (d < minDist) {
           minDist = d
           chosenId = id
         }
+      }
+      if (minDist > 4.5 && diceList[0]) {
+        chosenId = diceList[0].id
       }
     }
 
     if (!chosenId) {
       chosenId = diceList[0]?.id
     }
+    if (!chosenId) return
 
-    draggedDieIdRef.current = chosenId
+    isDraggingRef.current = true
+    draggedDieIdsRef.current = new Set([chosenId])
+
+    const dragTargetPoint =
+      get3DPlanePoint(e.clientX, e.clientY, 3.4) ||
+      (floorHit ? new THREE.Vector3(floorHit.x, 3.4, floorHit.z) : new THREE.Vector3(0, 3.4, 0))
+    dragCenterPointRef.current.copy(dragTargetPoint)
+
     const dieData = diceMapRef.current.get(chosenId)
     if (dieData) {
       const p = dieData.physics
@@ -583,56 +690,96 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
       p.vel.set(0, 0, 0)
       p.rotVel.set(0, 0, 0)
       p.holdTilt.set(0, 0)
-
-      if (point3D) {
-        p.pos.x = THREE.MathUtils.clamp(point3D.x, -p.boundX, p.boundX)
-        p.pos.z = THREE.MathUtils.clamp(point3D.z, -p.boundZ, p.boundZ)
-      }
-
-      recentWorldHistory.current = [
-        { x: p.pos.x, z: p.pos.z, time: performance.now() }
-      ]
     }
+
+    recentWorldHistory.current = [
+      { x: dragCenterPointRef.current.x, z: dragCenterPointRef.current.z, time: performance.now() },
+    ]
 
     if (navigator.vibrate) {
       navigator.vibrate(25)
     }
   }
 
-  // Pointer Move: Drag held die
+  // Pointer Move: Drag held dice and sweep other dice in path
   const handlePointerMove = (e) => {
     if (!isDraggingRef.current || isRolling) return
 
-    const dieData = diceMapRef.current.get(draggedDieIdRef.current)
-    if (!dieData) return
+    const point3D = get3DPlanePoint(e.clientX, e.clientY, 3.4)
+    if (!point3D) return
+
+    const boundX = 6.8
+    const boundZ = 6.8
+    point3D.x = THREE.MathUtils.clamp(point3D.x, -boundX, boundX)
+    point3D.z = THREE.MathUtils.clamp(point3D.z, -boundZ, boundZ)
+
+    const deltaX = point3D.x - dragCenterPointRef.current.x
+    const deltaZ = point3D.z - dragCenterPointRef.current.z
+    dragCenterPointRef.current.copy(point3D)
 
     const now = performance.now()
-    const p = dieData.physics
+    recentWorldHistory.current.push({ x: point3D.x, z: point3D.z, time: now })
+    if (recentWorldHistory.current.length > 8) {
+      recentWorldHistory.current.shift()
+    }
 
-    const point3D = get3DPlanePoint(e.clientX, e.clientY, p.pos.y)
-    if (point3D) {
-      const deltaX = point3D.x - p.pos.x
-      const deltaZ = point3D.z - p.pos.z
+    // Sweeping check: touch or brush against nearby resting dice to pick them up
+    const SWEEP_DISTANCE = 2.1
+    let newlyGrabbed = false
 
-      p.pos.x = THREE.MathUtils.clamp(point3D.x, -p.boundX, p.boundX)
-      p.pos.z = THREE.MathUtils.clamp(point3D.z, -p.boundZ, p.boundZ)
+    for (const [id, { physics }] of diceMapRef.current.entries()) {
+      if (!draggedDieIdsRef.current.has(id)) {
+        const distCenter = Math.hypot(physics.pos.x - point3D.x, physics.pos.z - point3D.z)
+        let inSweepRange = distCenter < SWEEP_DISTANCE
 
-      p.holdTilt.x = THREE.MathUtils.clamp(deltaX * 3, -1.2, 1.2)
-      p.holdTilt.y = THREE.MathUtils.clamp(deltaZ * 3, -1.2, 1.2)
+        if (!inSweepRange) {
+          for (const heldId of draggedDieIdsRef.current) {
+            const heldData = diceMapRef.current.get(heldId)
+            if (heldData) {
+              const d = Math.hypot(
+                physics.pos.x - heldData.physics.pos.x,
+                physics.pos.z - heldData.physics.pos.z
+              )
+              if (d < SWEEP_DISTANCE) {
+                inSweepRange = true
+                break
+              }
+            }
+          }
+        }
 
-      recentWorldHistory.current.push({ x: p.pos.x, z: p.pos.z, time: now })
-      if (recentWorldHistory.current.length > 6) {
-        recentWorldHistory.current.shift()
+        if (inSweepRange) {
+          draggedDieIdsRef.current.add(id)
+          physics.inMotion = false
+          physics.vel.set(0, 0, 0)
+          physics.rotVel.set(0, 0, 0)
+          newlyGrabbed = true
+        }
       }
+    }
+
+    // Apply movement tilt to all currently held dice
+    for (const heldId of draggedDieIdsRef.current) {
+      const heldData = diceMapRef.current.get(heldId)
+      if (heldData) {
+        heldData.physics.holdTilt.x = THREE.MathUtils.clamp(deltaX * 3.5, -1.2, 1.2)
+        heldData.physics.holdTilt.y = THREE.MathUtils.clamp(deltaZ * 3.5, -1.2, 1.2)
+      }
+    }
+
+    if (newlyGrabbed && navigator.vibrate) {
+      navigator.vibrate(20)
     }
   }
 
-  // Pointer Up: Drop or Toss
+  // Pointer Up: Release and throw ONLY the held/grabbed dice
   const handlePointerUp = () => {
     if (!isDraggingRef.current) return
     isDraggingRef.current = false
 
-    const dieData = diceMapRef.current.get(draggedDieIdRef.current)
+    const heldIds = Array.from(draggedDieIdsRef.current)
+    if (heldIds.length === 0) return
+
     const history = recentWorldHistory.current
     let throwVx = 0
     let throwVz = 0
@@ -649,38 +796,46 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
     }
 
     const speed = Math.hypot(throwVx, throwVz)
+    const isHardThrow = speed > 1.2
 
-    if (dieData) {
+    // Apply throw physics ONLY to held dice
+    heldIds.forEach((id, index) => {
+      const dieData = diceMapRef.current.get(id)
+      if (!dieData) return
       const p = dieData.physics
       p.inMotion = true
 
-      if (speed > 1.2) {
+      if (isHardThrow) {
+        // Natural fanned-out trajectory for multiple dice thrown together
+        const spreadAngle = (index - (heldIds.length - 1) / 2) * 0.25
+        const cos = Math.cos(spreadAngle)
+        const sin = Math.sin(spreadAngle)
+        const rotVx = throwVx * cos - throwVz * sin
+        const rotVz = throwVx * sin + throwVz * cos
+
         p.vel.set(
-          THREE.MathUtils.clamp(throwVx, -25, 25),
-          4.0 + Math.random() * 3.0,
-          THREE.MathUtils.clamp(throwVz, -25, 25)
+          THREE.MathUtils.clamp(rotVx + (Math.random() - 0.5) * 2.5, -25, 25),
+          4.0 + Math.random() * 3.5,
+          THREE.MathUtils.clamp(rotVz + (Math.random() - 0.5) * 2.5, -25, 25)
         )
         p.rotVel.set(
-          throwVz * 2.5 + (Math.random() - 0.5) * 30,
+          throwVz * 2.5 + (Math.random() - 0.5) * 35,
           (Math.random() - 0.5) * 50,
-          -throwVx * 2.5 + (Math.random() - 0.5) * 30
+          -throwVx * 2.5 + (Math.random() - 0.5) * 35
         )
-        // Also agitate other dice in the tray
-        diceMapRef.current.forEach((d, id) => {
-          if (id !== draggedDieIdRef.current) {
-            d.physics.inMotion = true
-            d.physics.vel.set((Math.random() - 0.5) * 10, 3 + Math.random() * 2, (Math.random() - 0.5) * 10)
-            d.physics.rotVel.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30)
-          }
-        })
-        if (onThrow && !isRolling) onThrow()
       } else {
-        p.vel.set((Math.random() - 0.5) * 2.0, -1.5, (Math.random() - 0.5) * 2.0)
+        // Light drop
+        p.vel.set((Math.random() - 0.5) * 2.0, -1.8, (Math.random() - 0.5) * 2.0)
         p.rotVel.set((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15)
-        if (onThrow && !isRolling) onThrow()
       }
+    })
+
+    // Roll numbers only for the thrown dice
+    if (onThrow) {
+      onThrow(heldIds)
     }
-    draggedDieIdRef.current = null
+
+    draggedDieIdsRef.current.clear()
   }
 
   return (
@@ -691,7 +846,7 @@ export default function Dice3DCanvas({ diceList, isRolling, onThrow }) {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
-      title="주사위를 집어 올려 던지거나 떨어뜨려 굴려보세요"
+      title="주사위를 집어 올려 던지거나 스쳐서 함께 굴려보세요"
     />
   )
 }
